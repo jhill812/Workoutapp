@@ -1,0 +1,55 @@
+@page "/exercises"
+@inject WorkoutService Data
+
+<PageTitle>Exercises · RepLog</PageTitle>
+
+<header class="hero row">
+    <h1>Exercises</h1>
+    <button class="btn btn-soft" @onclick="() => _creating = true"><Icon Name="plus" Size="18" /> New</button>
+</header>
+
+<ExerciseFilter @bind-Query="_query" @bind-Muscle="_muscle" />
+
+@{ var list = ExerciseFilter.Apply(Data.Exercises, _query, _muscle).ToList(); }
+@if (list.Count == 0)
+{
+    <div class="empty">
+        <h3>No matches</h3>
+        <button class="btn btn-primary" @onclick="() => _creating = true">Create "@_query"</button>
+    </div>
+}
+<ul class="list card flush">
+    @foreach (var e in list)
+    {
+        <li>
+            <a class="list-row" href="exercises/@e.Id">
+                <span class="avatar">@e.Name[..1]</span>
+                <span class="grow">
+                    <span class="row-title">@e.Name</span>
+                    <span class="row-sub">@Fmt.MuscleName(e.Muscle) · @ExerciseForm.TypeLabel(e.Type)</span>
+                </span>
+                @if (e.IsCustom)
+                {
+                    <span class="tag">Custom</span>
+                }
+                <Icon Name="chevron-right" Size="18" Class="muted" />
+            </a>
+        </li>
+    }
+</ul>
+
+<BottomSheet Open="_creating" Title="New exercise" OnClose="() => _creating = false">
+    <ExerciseForm InitialName="@_query" InitialMuscle="_muscle" OnCreated="Created" />
+</BottomSheet>
+
+@code {
+    private string _query = "";
+    private MuscleGroup? _muscle;
+    private bool _creating;
+
+    private void Created(Exercise e)
+    {
+        _creating = false;
+        _query = "";
+    }
+}

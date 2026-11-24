@@ -1,0 +1,119 @@
+@page "/exercises/{Id}"
+@inject WorkoutService Data
+@inject NavigationManager Nav
+
+@{
+    var name = _exercise?.Name ?? _record?.Name ?? "Exercise";
+    var type = _exercise?.Type ?? _record?.Type ?? ExerciseType.Strength;
+}
+<PageTitle>@name · RepLog</PageTitle>
+
+<header class="page-header">
+    <a class="icon-btn" href="exercises" aria-label="Back"><Icon Name="chevron-left" /></a>
+    <div class="grow min0">
+        <h1 class="h-title">@name</h1>
+        @if (_exercise is not null)
+        {
+            <div class="muted small">@Fmt.MuscleName(_exercise.Muscle) · @ExerciseForm.TypeLabel(_exercise.Type)</div>
+        }
+    </div>
+</header>
+
+@if (_record is null)
+{
+    <div class="empty">
+        <div class="empty-icon"><Icon Name="chart" Size="32" /></div>
+        <h3>No history yet</h3>
+        <p class="muted">Log this exercise in a workout to start tracking progress.</p>
+    </div>
+}
+else
+{
+    <div class="stat-grid">
+        @if (type == ExerciseType.Cardio)
+        {
+            <StatTile IconName="trophy" Value="@Fmt.Distance(_record.LongestKm, Data.Unit)" Label="Longest distance" Accent="true" />
+            <StatTile IconName="timer" Value="@Fmt.Clock(TimeSpan.FromSeconds(_record.LongestSeconds))" Label="Longest time" />
+        }
+        else if (type == ExerciseType.Bodyweight)
+        {
+            <StatTile IconName="trophy" Value="@_record.MaxReps.ToString()" Label="Most reps" Accent="true" />
+            <StatTile IconName="bolt" Value="@(_record.HeaviestWeight > 0 ? "+" + Fmt.Weight(_record.HeaviestWeight, Data.Unit) : "—")" Label="Most added weight" />
+        }
+        else
+        {
+            <StatTile IconName="trophy" Value="@Fmt.Weight(_record.BestOneRepMax, Data.Unit)" Label="Est. 1RM" Accent="true" />
+            <StatTile IconName="bolt" Value="@Fmt.Weight(_record.HeaviestWeight, Data.Unit)" Label="Heaviest" />
+        }
+        <StatTile IconName="calendar" Value="@_record.Sessions.ToString()" Label="Sessions" />
+    </div>
+
+    <section class="card">
+        <div class="card-head">
+            <h2>@ChartTitle(type)</h2>
+            <span class="muted small">Last @_points.Count sessions</span>
+        </div>
+        <LineChart Points="_points" AriaLabel="@ChartTitle(type)" />
+    </section>
+
+    <h2 class="section-title">Sessions</h2>
+    <div class="stack">
+        @foreach (var s in _history.AsEnumerable().Reverse())
+        {
+            <a class="card session-row" href="workout/@s.WorkoutId">
+                <div class="row-title">@Fmt.RelativeDay(s.Date, Data.Now)</div>
+                <div class="set-pills">
+                    @foreach (var set in s.Sets)
+                    {
+                        <span class="pill">@Fmt.Set(set, type, Data.Unit)</span>
+                    }
+                </div>
+            </a>
+        }
+    </div>
+}
+
+@if (_exercise?.IsCustom == true)
+{
+    <button class="btn btn-danger-ghost block" @onclick="AskDelete"><Icon Name="trash" Size="18" /> Delete custom exercise</button>
+}
+<ConfirmDialog Request="_confirm" OnDismiss="() => _confirm = null" />
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private Exercise? _exercise;
+    private PersonalRecord? _record;
+    private IReadOnlyList<ExerciseSession> _history = [];
+    private IReadOnlyList<ChartPoint> _points = [];
+    private ConfirmRequest? _confirm;
+
+    protected override void OnParametersSet()
+    {
+        _exercise = Data.FindExercise(Id);
+        _history = Stats.ExerciseHistory(Data.History, Id);
+        _record = Stats.GetRecord(Data.History, Id);
+        var type = _exercise?.Type ?? _record?.Type ?? ExerciseType.Strength;
+        _points = _history.TakeLast(20).Select(h =>
+        {
+            var v = type switch
+            {
+                ExerciseType.Cardio => h.TotalKm > 0 ? Units.ToDisplayDistance(h.TotalKm, Data.Unit) : h.TotalSeconds / 60.0,
+                ExerciseType.Bodyweight => h.MaxReps,
+                _ => Units.ToDisplayWeight(h.BestOneRepMax, Data.Unit)
+            };
+            return new ChartPoint(h.Date.ToString("MMM d", System.Globalization.CultureInfo.InvariantCulture), v, Fmt.Number(v));
+        }).ToList();
+    }
+
+    private string ChartTitle(ExerciseType type) => type switch
+    {
+        ExerciseType.Cardio => "Distance",
+        ExerciseType.Bodyweight => "Max reps",
+        _ => $"Estimated 1RM ({Units.WeightLabel(Data.Unit)})"
+    };
+
+    private void AskDelete() => _confirm = new("Delete exercise?",
+        "It will be removed from the library. Past workouts keep their history.", "Delete",
+        async () => { await Data.DeleteCustomExerciseAsync(Id); Nav.NavigateTo("exercises"); });
+}

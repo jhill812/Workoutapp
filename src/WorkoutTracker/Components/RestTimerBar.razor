@@ -1,0 +1,41 @@
+@implements IDisposable
+@inject RestTimerService Rest
+@inject DeviceService Device
+
+@if (Rest.IsRunning)
+{
+    <div class="rest-bar" role="timer" aria-live="polite">
+        <div class="rest-progress" style="width:@((Rest.Progress * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+        <div class="rest-content">
+            <Icon Name="timer" Size="20" />
+            <div class="rest-time">
+                <span class="rest-label">Rest</span>
+                <strong>@Fmt.Clock(Rest.Remaining)</strong>
+            </div>
+            <button class="chip-btn" @onclick="() => Rest.Adjust(-15)">−15</button>
+            <button class="chip-btn" @onclick="() => Rest.Adjust(15)">+15</button>
+            <button class="chip-btn strong" @onclick="Rest.Stop">Skip</button>
+        </div>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        Rest.Tick += Refresh;
+        Rest.Finished += OnFinished;
+    }
+
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    private async void OnFinished()
+    {
+        try { await Device.RestDoneAlert(); } catch (JSException) { /* vibration/audio unsupported */ }
+    }
+
+    public void Dispose()
+    {
+        Rest.Tick -= Refresh;
+        Rest.Finished -= OnFinished;
+    }
+}

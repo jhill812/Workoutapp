@@ -1,0 +1,23 @@
+<div class="search-box">
+    <Icon Name="search" Size="18" />
+    <input type="search" placeholder="Search exercises" aria-label="Search exercises"
+           value="@Query" @oninput="e => QueryChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty)" />
+</div>
+<div class="chips" role="tablist">
+    <button class="chip @(Muscle is null ? "on" : "")" @onclick="() => MuscleChanged.InvokeAsync(null)">All</button>
+    @foreach (var m in Enum.GetValues<MuscleGroup>())
+    {
+        <button class="chip @(Muscle == m ? "on" : "")" @onclick="() => MuscleChanged.InvokeAsync(m)">@Fmt.MuscleName(m)</button>
+    }
+</div>
+
+@code {
+    [Parameter] public string Query { get; set; } = "";
+    [Parameter] public EventCallback<string> QueryChanged { get; set; }
+    [Parameter] public MuscleGroup? Muscle { get; set; }
+    [Parameter] public EventCallback<MuscleGroup?> MuscleChanged { get; set; }
+
+    public static IEnumerable<Exercise> Apply(IEnumerable<Exercise> source, string query, MuscleGroup? muscle) =>
+        source.Where(e => (muscle is null || e.Muscle == muscle)
+                          && (string.IsNullOrWhiteSpace(query) || e.Name.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase)));
+}

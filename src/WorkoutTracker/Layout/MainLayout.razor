@@ -1,0 +1,68 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject WorkoutService Data
+@inject DeviceService Device
+@inject NavigationManager Nav
+
+<div class="shell">
+    <aside class="sidenav">
+        <div class="brand">
+            <span class="brand-mark"><Icon Name="bolt" Size="20" /></span>
+            <span>Rep<span class="brand-accent">Log</span></span>
+        </div>
+        <NavItems />
+    </aside>
+
+    <main class="content">
+        @if (!_ready)
+        {
+            <div class="center-fill"><div class="spinner"></div></div>
+        }
+        else
+        {
+            @if (Data.ActiveWorkout is { } active && !Nav.Uri.Contains($"/workout/{active.Id}"))
+            {
+                <a class="active-banner" href="workout/@active.Id">
+                    <span class="pulse-dot"></span>
+                    <span class="grow"><strong>@active.Name</strong><span class="muted"> · in progress</span></span>
+                    <span class="banner-cta">Resume <Icon Name="chevron-right" Size="18" /></span>
+                </a>
+            }
+            @Body
+        }
+    </main>
+
+    <nav class="tabbar" aria-label="Main">
+        <NavItems />
+    </nav>
+
+    <RestTimerBar />
+</div>
+
+<div id="blazor-error-ui">
+    Something went wrong.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">✕</a>
+</div>
+
+@code {
+    private bool _ready;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Data.EnsureLoadedAsync();
+        _ready = true;
+        Data.Changed += Refresh;
+        Nav.LocationChanged += OnLocationChanged;
+        try { await Device.ApplyTheme(Data.Settings.Theme); } catch (JSException) { }
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => Refresh();
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Data.Changed -= Refresh;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

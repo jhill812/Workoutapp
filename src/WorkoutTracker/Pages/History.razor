@@ -1,0 +1,32 @@
+@page "/history"
+@inject WorkoutService Data
+
+<PageTitle>History · RepLog</PageTitle>
+
+<header class="hero"><h1>History</h1></header>
+
+@if (Data.History.Count == 0)
+{
+    <div class="empty">
+        <div class="empty-icon"><Icon Name="history" Size="32" /></div>
+        <h3>Nothing logged yet</h3>
+        <p class="muted">Finished workouts appear here.</p>
+        <a class="btn btn-primary" href="">Start a workout</a>
+    </div>
+}
+else
+{
+    @foreach (var month in Data.History.GroupBy(w => new DateTime(w.StartedAt.Year, w.StartedAt.Month, 1)))
+    {
+        <div class="section-head">
+            <h2 class="section-title">@month.Key.ToString("MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture)</h2>
+            <span class="muted small">@month.Count() workout@(month.Count() == 1 ? "" : "s")</span>
+        </div>
+        <div class="stack">
+            @foreach (var w in month)
+            {
+                <WorkoutCard Workout="w" Now="Data.Now" Unit="Data.Unit" />
+            }
+        </div>
+    }
+}

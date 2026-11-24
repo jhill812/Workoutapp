@@ -1,0 +1,122 @@
+@using System.Globalization
+<section class="card exercise-card">
+    <header class="exercise-head">
+        <div class="grow">
+            <a class="exercise-name" href="exercises/@Entry.ExerciseId">@Entry.Name</a>
+            <div class="tag-row"><span class="tag">@Fmt.MuscleName(Entry.Muscle)</span></div>
+        </div>
+        <button class="icon-btn subtle" aria-label="Remove @Entry.Name" @onclick="OnRemove"><Icon Name="trash" Size="18" /></button>
+    </header>
+
+    <div class="set-grid set-head">
+        <span>Set</span>
+        <span>Previous</span>
+        <span>@Col1</span>
+        <span>@Col2</span>
+        <span class="center"><Icon Name="check" Size="16" /></span>
+    </div>
+
+    @for (var i = 0; i < Entry.Sets.Count; i++)
+    {
+        var set = Entry.Sets[i];
+        var prev = Previous is not null && i < Previous.Count ? Previous[i] : null;
+        <div class="set-grid set-row @(set.Completed ? "done" : "")" @key="set">
+            <span class="set-num">@(i + 1)</span>
+            <button class="prev" disabled="@(prev is null)" title="Copy previous" @onclick="() => CopyPrevious(set, prev)">
+                @(prev is null ? "—" : Fmt.Set(prev, Entry.Type, Unit))
+            </button>
+            @if (Entry.Type == ExerciseType.Cardio)
+            {
+                <input class="num" type="number" inputmode="decimal" min="0" step="any" aria-label="Minutes, set @(i + 1)"
+                       placeholder="0" value="@Show(set.DurationSeconds / 60.0)" @onchange="e => Update(set, e, (s, v) => s.DurationSeconds = (int)Math.Round(v * 60))" />
+                <input class="num" type="number" inputmode="decimal" min="0" step="any" aria-label="Distance, set @(i + 1)"
+                       placeholder="0" value="@Show(Units.ToDisplayDistance(set.DistanceKm, Unit))" @onchange="e => Update(set, e, (s, v) => s.DistanceKm = Units.FromDisplayDistance(v, Unit))" />
+            }
+            else
+            {
+                <input class="num" type="number" inputmode="decimal" min="0" step="any" aria-label="Weight, set @(i + 1)"
+                       placeholder="@(Entry.Type == ExerciseType.Bodyweight ? "+0" : "0")" value="@Show(Units.ToDisplayWeight(set.Weight, Unit))"
+                       @onchange="e => Update(set, e, (s, v) => s.Weight = Units.FromDisplayWeight(v, Unit))" />
+                <input class="num" type="number" inputmode="numeric" min="0" step="1" aria-label="Reps, set @(i + 1)"
+                       placeholder="0" value="@Show(set.Reps)" @onchange="e => Update(set, e, (s, v) => s.Reps = (int)Math.Round(v))" />
+            }
+            <button class="check-btn" aria-label="Complete set @(i + 1)" aria-pressed="@set.Completed" @onclick="() => Toggle(set, prev)">
+                <Icon Name="check" Size="18" Stroke="3" />
+            </button>
+        </div>
+    }
+
+    <div class="exercise-actions">
+        <button class="btn btn-soft btn-sm" @onclick="AddSet"><Icon Name="plus" Size="16" /> Add set</button>
+        @if (Entry.Sets.Count > 0)
+        {
+            <button class="btn btn-ghost btn-sm" @onclick="RemoveLastSet"><Icon Name="minus" Size="16" /> Remove set</button>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public WorkoutExercise Entry { get; set; } = default!;
+    [Parameter] public IReadOnlyList<SetEntry>? Previous { get; set; }
+    [Parameter] public WeightUnit Unit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback OnSetCompleted { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private string Col1 => Entry.Type switch
+    {
+        ExerciseType.Cardio => "Min",
+        ExerciseType.Bodyweight => "+" + Units.WeightLabel(Unit),
+        _ => Units.WeightLabel(Unit)
+    };
+    private string Col2 => Entry.Type == ExerciseType.Cardio ? Units.DistanceLabel(Unit) : "Reps";
+
+    private static string Show(double v) => v > 0 ? Math.Round(v, 2).ToString("0.##", CultureInfo.InvariantCulture) : "";
+
+    private Task Update(SetEntry set, ChangeEventArgs e, Action<SetEntry, double> apply)
+    {
+        var text = e.Value?.ToString();
+        var value = double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v > 0 ? v : 0;
+        apply(set, value);
+        return OnChanged.InvokeAsync();
+    }
+
+    private static bool IsEmpty(SetEntry s) => s.Weight == 0 && s.Reps == 0 && s.DurationSeconds == 0 && s.DistanceKm == 0;
+
+    private static void CopyInto(SetEntry target, SetEntry source)
+    {
+        target.Weight = source.Weight;
+        target.Reps = source.Reps;
+        target.DurationSeconds = source.DurationSeconds;
+        target.DistanceKm = source.DistanceKm;
+    }
+
+    private Task CopyPrevious(SetEntry set, SetEntry? prev)
+    {
+        if (prev is null) return Task.CompletedTask;
+        CopyInto(set, prev);
+        return OnChanged.InvokeAsync();
+    }
+
+    private async Task Toggle(SetEntry set, SetEntry? prev)
+    {
+        if (!set.Completed && IsEmpty(set) && prev is not null) CopyInto(set, prev);
+        set.Completed = !set.Completed;
+        await OnChanged.InvokeAsync();
+        if (set.Completed) await OnSetCompleted.InvokeAsync();
+    }
+
+    private Task AddSet()
+    {
+        var template = Entry.Sets.LastOrDefault()
+                       ?? (Previous is not null && Entry.Sets.Count < Previous.Count ? Previous[Entry.Sets.Count] : null);
+        Entry.Sets.Add(template?.Clone() ?? new SetEntry());
+        return OnChanged.InvokeAsync();
+    }
+
+    private Task RemoveLastSet()
+    {
+        Entry.Sets.RemoveAt(Entry.Sets.Count - 1);
+        return OnChanged.InvokeAsync();
+    }
+}

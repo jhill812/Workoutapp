@@ -1,0 +1,27 @@
+@if (Request is not null)
+{
+    <div class="overlay" @onclick="Dismiss">
+        <div class="dialog" role="alertdialog" aria-modal="true" @onclick:stopPropagation="true">
+            <h2>@Request.Title</h2>
+            <p class="muted">@Request.Message</p>
+            <div class="dialog-actions">
+                <button class="btn btn-ghost" @onclick="Dismiss">Cancel</button>
+                <button class="btn @(Request.Danger ? "btn-danger" : "btn-primary")" @onclick="Confirm">@Request.ConfirmText</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public ConfirmRequest? Request { get; set; }
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private Task Dismiss() => OnDismiss.InvokeAsync();
+
+    private async Task Confirm()
+    {
+        var action = Request!.OnConfirm;
+        await OnDismiss.InvokeAsync();
+        await action();
+    }
+}

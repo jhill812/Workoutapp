@@ -1,0 +1,165 @@
+@page "/workout/{Id:guid}"
+@implements IDisposable
+@inject WorkoutService Data
+@inject RestTimerService Rest
+@inject DeviceService Device
+@inject NavigationManager Nav
+@inject TimeProvider Time
+
+<PageTitle>@(_workout?.Name ?? "Workout") · RepLog</PageTitle>
+
+@if (_workout is null)
+{
+    <div class="empty">
+        <h3>Workout not found</h3>
+        <p class="muted">It may have been deleted.</p>
+        <a class="btn btn-primary" href="">Go home</a>
+    </div>
+}
+else
+{
+    <header class="page-header sticky">
+        <button class="icon-btn" aria-label="Back" @onclick="Back"><Icon Name="chevron-left" /></button>
+        <div class="grow min0">
+            <input class="title-input" aria-label="Workout name" value="@_workout.Name" @onchange="Rename" />
+            <div class="muted small">
+                @if (_workout.IsActive)
+                {
+                    <span class="live"><span class="pulse-dot"></span>@Fmt.Clock(Stats.Duration(_workout, Data.Now))</span>
+                }
+                else
+                {
+                    <span>@_workout.StartedAt.ToString("ddd, MMM d · h:mm tt", System.Globalization.CultureInfo.InvariantCulture) · @Fmt.Duration(Stats.Duration(_workout, Data.Now))</span>
+                }
+            </div>
+        </div>
+        @if (_workout.IsActive)
+        {
+            <button class="btn btn-primary" @onclick="AskFinish">Finish</button>
+        }
+    </header>
+
+    @if (_workout.Exercises.Count > 0)
+    {
+        <div class="summary-strip">
+            <div><strong>@Stats.CompletedSets(_workout)</strong><span>sets</span></div>
+            <div><strong>@Fmt.Volume(Stats.Volume(_workout), Data.Unit)</strong><span>volume</span></div>
+            <div><strong>@_workout.Exercises.Count</strong><span>exercises</span></div>
+        </div>
+    }
+
+    <div class="stack">
+        @foreach (var ex in _workout.Exercises)
+        {
+            <ExerciseCard @key="ex" Entry="ex" Unit="Data.Unit"
+                          Previous="Data.GetPreviousSets(ex.ExerciseId, _workout.Id)"
+                          OnChanged="Save" OnSetCompleted="SetCompleted"
+                          OnRemove="() => AskRemove(ex)" />
+        }
+    </div>
+
+    @if (_workout.Exercises.Count == 0)
+    {
+        <div class="empty">
+            <div class="empty-icon"><Icon Name="dumbbell" Size="32" /></div>
+            <h3>Add your first exercise</h3>
+            <p class="muted">Pick from the library or create your own.</p>
+        </div>
+    }
+
+    <button class="btn btn-soft block lg" @onclick="() => _pickerOpen = true"><Icon Name="plus" /> Add exercises</button>
+
+    <label class="field notes">
+        <span><Icon Name="note" Size="16" /> Notes</span>
+        <textarea class="input" rows="2" placeholder="How did it feel?" value="@_workout.Notes" @onchange="SetNotes"></textarea>
+    </label>
+
+    <button class="btn btn-danger-ghost block" @onclick="AskDelete">
+        <Icon Name="trash" Size="18" /> @(_workout.IsActive ? "Discard workout" : "Delete workout")
+    </button>
+
+    <ExercisePicker Open="_pickerOpen" OnClose="() => _pickerOpen = false" OnPick="AddExercises" />
+    <ConfirmDialog Request="_confirm" OnDismiss="() => _confirm = null" />
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private Workout? _workout;
+    private bool _pickerOpen;
+    private ConfirmRequest? _confirm;
+    private ITimer? _clock;
+
+    protected override void OnParametersSet()
+    {
+        _workout = Data.GetWorkout(Id);
+        _clock?.Dispose();
+        _clock = _workout?.IsActive == true
+            ? Time.CreateTimer(_ => InvokeAsync(StateHasChanged), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1))
+            : null;
+    }
+
+    private Task Save() => Data.SaveAsync();
+
+    private async Task Rename(ChangeEventArgs e)
+    {
+        var name = e.Value?.ToString()?.Trim();
+        _workout!.Name = string.IsNullOrEmpty(name) ? WorkoutService.DefaultName(_workout.StartedAt) : name;
+        await Save();
+    }
+
+    private async Task SetNotes(ChangeEventArgs e)
+    {
+        _workout!.Notes = e.Value?.ToString();
+        await Save();
+    }
+
+    private async Task SetCompleted()
+    {
+        try { await Device.Buzz(30); } catch (JSException) { }
+        if (_workout!.IsActive && Data.Settings.DefaultRestSeconds > 0) Rest.Start(Data.Settings.DefaultRestSeconds);
+    }
+
+    private async Task AddExercises(IReadOnlyList<Exercise> picked)
+    {
+        _pickerOpen = false;
+        foreach (var e in picked) await Data.AddExerciseAsync(_workout!, e);
+    }
+
+    private void AskRemove(WorkoutExercise ex) => _confirm = new(
+        "Remove exercise?", $"{ex.Name} and its {ex.Sets.Count} sets will be removed from this workout.", "Remove",
+        async () => { _workout!.Exercises.Remove(ex); await Save(); });
+
+    private void AskFinish()
+    {
+        var done = Stats.CompletedSets(_workout!);
+        var pending = _workout!.Exercises.Sum(e => e.Sets.Count(s => !s.Completed));
+        var message = done == 0
+            ? "You haven't completed any sets. Finishing now will save an empty workout."
+            : pending > 0 ? $"{pending} unchecked set{(pending == 1 ? "" : "s")} will be dropped. Nice session!" : "Great session — save it to your history?";
+        _confirm = new("Finish workout?", message, "Finish", Finish, Danger: false);
+    }
+
+    private async Task Finish()
+    {
+        Rest.Stop();
+        await Data.FinishWorkoutAsync(_workout!);
+        _clock?.Dispose();
+        _clock = null;
+        try { await Device.Buzz(60, 80, 60); } catch (JSException) { }
+    }
+
+    private void AskDelete() => _confirm = new(
+        _workout!.IsActive ? "Discard workout?" : "Delete workout?",
+        "This can't be undone.", _workout.IsActive ? "Discard" : "Delete",
+        async () =>
+        {
+            if (_workout.IsActive) Rest.Stop();
+            await Data.DeleteWorkoutAsync(_workout.Id);
+            Nav.NavigateTo(_workout.IsActive ? "" : "history");
+        });
+
+    private void Back() => Nav.NavigateTo(_workout?.IsActive == true ? "" : "history");
+
+    public void Dispose() => _clock?.Dispose();
+}

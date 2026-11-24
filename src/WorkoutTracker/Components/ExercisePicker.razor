@@ -1,0 +1,87 @@
+@inject WorkoutService Data
+
+<BottomSheet Open="Open" Title="Add exercises" OnClose="Close">
+    <ChildContent>
+        <ExerciseFilter @bind-Query="_query" @bind-Muscle="_muscle" />
+        @if (_creating)
+        {
+            <div class="card inset">
+                <ExerciseForm InitialName="@_query" InitialMuscle="_muscle" OnCreated="Created" />
+            </div>
+        }
+        <ul class="list pick-list">
+            @foreach (var e in Filtered)
+            {
+                var on = _selected.Contains(e.Id);
+                <li>
+                    <button class="list-row @(on ? "selected" : "")" aria-pressed="@on" @onclick="() => Toggle(e.Id)">
+                        <span class="avatar">@e.Name[..1]</span>
+                        <span class="grow">
+                            <span class="row-title">@e.Name</span>
+                            <span class="row-sub">@Fmt.MuscleName(e.Muscle)@(e.IsCustom ? " · Custom" : "")</span>
+                        </span>
+                        <span class="pick-check"><Icon Name="check" Size="16" Stroke="3" /></span>
+                    </button>
+                </li>
+            }
+        </ul>
+        @if (!_creating)
+        {
+            <button class="btn btn-ghost block" @onclick="() => _creating = true">
+                <Icon Name="plus" Size="18" /> @(string.IsNullOrWhiteSpace(_query) ? "Create custom exercise" : $"Create \"{_query.Trim()}\"")
+            </button>
+        }
+    </ChildContent>
+    <Footer>
+        <button class="btn btn-primary block" disabled="@(_selected.Count == 0)" @onclick="Confirm">
+            Add @(_selected.Count == 0 ? "" : _selected.Count.ToString()) exercise@(_selected.Count == 1 ? "" : "s")
+        </button>
+    </Footer>
+</BottomSheet>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<Exercise>> OnPick { get; set; }
+
+    private string _query = "";
+    private MuscleGroup? _muscle;
+    private bool _creating;
+    private readonly List<string> _selected = [];
+
+    private IEnumerable<Exercise> Filtered => ExerciseFilter.Apply(Data.Exercises, _query, _muscle);
+
+    private void Toggle(string id)
+    {
+        if (!_selected.Remove(id)) _selected.Add(id);
+    }
+
+    private void Created(Exercise e)
+    {
+        _creating = false;
+        _query = "";
+        _muscle = null;
+        if (!_selected.Contains(e.Id)) _selected.Add(e.Id);
+    }
+
+    private async Task Confirm()
+    {
+        var picked = _selected.Select(Data.FindExercise).OfType<Exercise>().ToList();
+        Reset();
+        await OnPick.InvokeAsync(picked);
+    }
+
+    private async Task Close()
+    {
+        Reset();
+        await OnClose.InvokeAsync();
+    }
+
+    private void Reset()
+    {
+        _selected.Clear();
+        _query = "";
+        _muscle = null;
+        _creating = false;
+    }
+}

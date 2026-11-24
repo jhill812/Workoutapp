@@ -1,0 +1,63 @@
+@using System.Globalization
+@* Simple SVG trend line with gradient fill. Fixed aspect ratio keeps dots round. *@
+@if (Points.Count == 0)
+{
+    <div class="empty-chart muted">No data yet</div>
+}
+else
+{
+    var (path, area, dots) = Build();
+    <div class="line-chart" role="img" aria-label="@AriaLabel">
+        <div class="line-chart-axis">
+            <span>@Points.Max(p => p.Value).ToString("0.#", CultureInfo.InvariantCulture)</span>
+            <span>@Points.Min(p => p.Value).ToString("0.#", CultureInfo.InvariantCulture)</span>
+        </div>
+        <svg viewBox="0 0 @W @H" class="line-chart-svg">
+            <defs>
+                <linearGradient id="lc-fill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35" />
+                    <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+                </linearGradient>
+            </defs>
+            <path d="@area" fill="url(#lc-fill)" />
+            <path d="@path" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+            @foreach (var (x, y, last) in dots)
+            {
+                <circle cx="@x" cy="@y" r="@(last ? 4.5 : 3)" fill="@(last ? "var(--accent)" : "var(--surface)")" stroke="var(--accent)" stroke-width="2" />
+            }
+        </svg>
+        <div class="line-chart-labels">
+            <span>@Points[0].Label</span>
+            @if (Points.Count > 1)
+            {
+                <span>@Points[^1].Label</span>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<ChartPoint> Points { get; set; } = [];
+    [Parameter] public string AriaLabel { get; set; } = "Trend chart";
+
+    private const double W = 320, H = 140, Pad = 8;
+
+    private (string Path, string Area, List<(string X, string Y, bool Last)> Dots) Build()
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var min = Points.Min(p => p.Value);
+        var max = Points.Max(p => p.Value);
+        var range = max - min;
+        if (range < 0.0001) { min -= 1; range = 2; }
+
+        var pts = Points.Select((p, i) => (
+            X: Points.Count == 1 ? W / 2 : Pad + i * (W - 2 * Pad) / (Points.Count - 1),
+            Y: Pad + (1 - (p.Value - min) / range) * (H - 2 * Pad))).ToList();
+
+        string F(double v) => v.ToString("0.##", inv);
+        var path = string.Join(" ", pts.Select((p, i) => $"{(i == 0 ? "M" : "L")}{F(p.X)},{F(p.Y)}"));
+        var area = $"{path} L{F(pts[^1].X)},{F(H)} L{F(pts[0].X)},{F(H)} Z";
+        var dots = pts.Select((p, i) => (F(p.X), F(p.Y), i == pts.Count - 1)).ToList();
+        return (path, area, dots);
+    }
+}

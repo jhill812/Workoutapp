@@ -1,0 +1,27 @@
+@if (Open)
+{
+    <div class="overlay sheet-overlay" @onclick="Close">
+        <div class="sheet" role="dialog" aria-modal="true" aria-label="@Title" @onclick:stopPropagation="true">
+            <div class="sheet-grabber"></div>
+            <div class="sheet-header">
+                <h2>@Title</h2>
+                <button class="icon-btn" aria-label="Close" @onclick="Close"><Icon Name="x" /></button>
+            </div>
+            <div class="sheet-body">@ChildContent</div>
+            @if (Footer is not null)
+            {
+                <div class="sheet-footer">@Footer</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private Task Close() => OnClose.InvokeAsync();
+}

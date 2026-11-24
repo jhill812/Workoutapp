@@ -1,0 +1,23 @@
+{
+  "name": "RepLog — Workout Tracker",
+  "short_name": "RepLog",
+  "description": "Log workouts, track progress and beat your personal records.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0b0f",
+  "theme_color": "#0a0b0f",
+  "categories": ["health", "fitness", "sports"],
+  "prefer_related_applications": false,
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "History", "url": "./history", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] },
+    { "name": "Progress", "url": "./progress", "icons": [{ "src": "icon-192.png", "sizes": "192x192" }] }
+  ]
+}

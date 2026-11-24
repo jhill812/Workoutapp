@@ -1,0 +1,73 @@
+@inject WorkoutService Data
+
+<div class="form">
+    <label class="field">
+        <span>Name</span>
+        <input class="input" @bind="_name" @bind:event="oninput" placeholder="e.g. Cable Lateral Raise" maxlength="60" />
+    </label>
+    <label class="field">
+        <span>Muscle group</span>
+        <select class="input" @bind="_muscle">
+            @foreach (var m in Enum.GetValues<MuscleGroup>())
+            {
+                <option value="@m">@Fmt.MuscleName(m)</option>
+            }
+        </select>
+    </label>
+    <div class="field">
+        <span>Tracking</span>
+        <div class="segmented">
+            @foreach (var t in Enum.GetValues<ExerciseType>())
+            {
+                <button type="button" class="@(_type == t ? "on" : "")" @onclick="() => _type = t">@TypeLabel(t)</button>
+            }
+        </div>
+    </div>
+    @if (_error is not null)
+    {
+        <p class="error">@_error</p>
+    }
+    <button class="btn btn-primary block" disabled="@string.IsNullOrWhiteSpace(_name)" @onclick="Create">
+        <Icon Name="plus" Size="18" /> Create exercise
+    </button>
+</div>
+
+@code {
+    [Parameter] public string? InitialName { get; set; }
+    [Parameter] public MuscleGroup? InitialMuscle { get; set; }
+    [Parameter] public EventCallback<Exercise> OnCreated { get; set; }
+
+    private string _name = "";
+    private MuscleGroup _muscle = MuscleGroup.Chest;
+    private ExerciseType _type = ExerciseType.Strength;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _name = InitialName ?? "";
+        _muscle = InitialMuscle ?? MuscleGroup.Chest;
+        if (_muscle == MuscleGroup.Cardio) _type = ExerciseType.Cardio;
+    }
+
+    public static string TypeLabel(ExerciseType t) => t switch
+    {
+        ExerciseType.Strength => "Weight × Reps",
+        ExerciseType.Bodyweight => "Bodyweight",
+        _ => "Time / Distance"
+    };
+
+    private async Task Create()
+    {
+        try
+        {
+            var exercise = await Data.AddCustomExerciseAsync(_name, _muscle, _type);
+            _error = null;
+            _name = "";
+            await OnCreated.InvokeAsync(exercise);
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message.Split(" (Parameter")[0];
+        }
+    }
+}

@@ -1,0 +1,29 @@
+<a class="card workout-card" href="workout/@Workout.Id">
+    <div class="workout-card-top">
+        <div class="grow">
+            <div class="row-title">@Workout.Name</div>
+            <div class="row-sub">@Fmt.RelativeDay(Workout.StartedAt, Now) · @Workout.StartedAt.ToString("h:mm tt", System.Globalization.CultureInfo.InvariantCulture)</div>
+        </div>
+        <Icon Name="chevron-right" Size="18" Class="muted" />
+    </div>
+    <div class="workout-metrics">
+        <span><Icon Name="timer" Size="15" /> @Fmt.Duration(Stats.Duration(Workout, Now))</span>
+        <span><Icon Name="dumbbell" Size="15" /> @Stats.CompletedSets(Workout) sets</span>
+        @if (Stats.Volume(Workout) > 0)
+        {
+            <span><Icon Name="bolt" Size="15" /> @Fmt.Volume(Stats.Volume(Workout), Unit)</span>
+        }
+    </div>
+    @if (Workout.Exercises.Count > 0)
+    {
+        <div class="workout-exercises">
+            @string.Join(" · ", Workout.Exercises.Select(e => e.Sets.Count > 1 ? $"{e.Sets.Count}× {e.Name}" : e.Name))
+        </div>
+    }
+</a>
+
+@code {
+    [Parameter, EditorRequired] public Workout Workout { get; set; } = default!;
+    [Parameter] public DateTime Now { get; set; }
+    [Parameter] public WeightUnit Unit { get; set; }
+}

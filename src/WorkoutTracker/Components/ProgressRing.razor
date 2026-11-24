@@ -1,0 +1,17 @@
+@using System.Globalization
+<div class="ring" style="width:@(Size)px;height:@(Size)px">
+    <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="42" class="ring-track" />
+        <circle cx="50" cy="50" r="42" class="ring-fill"
+                stroke-dasharray="@Circ.ToString("0.##", CultureInfo.InvariantCulture)"
+                stroke-dashoffset="@((Circ * (1 - Math.Clamp(Value, 0, 1))).ToString("0.##", CultureInfo.InvariantCulture))" />
+    </svg>
+    <div class="ring-content">@ChildContent</div>
+</div>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public int Size { get; set; } = 96;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private const double Circ = 2 * Math.PI * 42;
+}

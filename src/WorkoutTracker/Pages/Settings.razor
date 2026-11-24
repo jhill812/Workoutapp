@@ -1,0 +1,119 @@
+@page "/settings"
+@inject WorkoutService Data
+@inject DeviceService Device
+
+<PageTitle>Settings · RepLog</PageTitle>
+
+<header class="hero"><h1>Settings</h1></header>
+
+<section class="card settings">
+    <div class="setting">
+        <div class="grow"><div class="row-title">Units</div><div class="row-sub">Weight and distance</div></div>
+        <div class="segmented">
+            <button class="@(Data.Unit == WeightUnit.Kg ? "on" : "")" @onclick="() => Update(s => s.Unit = WeightUnit.Kg)">kg · km</button>
+            <button class="@(Data.Unit == WeightUnit.Lb ? "on" : "")" @onclick="() => Update(s => s.Unit = WeightUnit.Lb)">lb · mi</button>
+        </div>
+    </div>
+    <div class="setting">
+        <div class="grow"><div class="row-title">Rest timer</div><div class="row-sub">Starts when you check off a set</div></div>
+        <div class="segmented">
+            @foreach (var sec in RestOptions)
+            {
+                <button class="@(Data.Settings.DefaultRestSeconds == sec ? "on" : "")" @onclick="() => Update(s => s.DefaultRestSeconds = sec)">
+                    @(sec == 0 ? "Off" : sec < 60 ? $"{sec}s" : $"{sec / 60.0:0.#}m")
+                </button>
+            }
+        </div>
+    </div>
+    <div class="setting">
+        <div class="grow"><div class="row-title">Weekly goal</div><div class="row-sub">Workouts per week</div></div>
+        <div class="stepper">
+            <button class="icon-btn" aria-label="Decrease goal" @onclick="() => Update(s => s.WeeklyGoal--)"><Icon Name="minus" Size="18" /></button>
+            <strong aria-live="polite">@Data.Settings.WeeklyGoal</strong>
+            <button class="icon-btn" aria-label="Increase goal" @onclick="() => Update(s => s.WeeklyGoal++)"><Icon Name="plus" Size="18" /></button>
+        </div>
+    </div>
+    <div class="setting">
+        <div class="grow"><div class="row-title">Theme</div></div>
+        <div class="segmented">
+            @foreach (var t in Enum.GetValues<ThemePreference>())
+            {
+                <button class="@(Data.Settings.Theme == t ? "on" : "")" @onclick="() => SetTheme(t)">@t</button>
+            }
+        </div>
+    </div>
+</section>
+
+<h2 class="section-title">Your data</h2>
+<section class="card settings">
+    <p class="muted small">Workouts are stored privately on this device. Export a backup regularly, or to move to a new phone.</p>
+    <div class="button-row">
+        <button class="btn btn-soft" @onclick="Export"><Icon Name="download" Size="18" /> Export backup</button>
+        <label class="btn btn-soft">
+            <Icon Name="upload" Size="18" /> Import backup
+            <InputFile class="visually-hidden" accept=".json,application/json" OnChange="Import" />
+        </label>
+    </div>
+    @if (_message is not null)
+    {
+        <p class="@(_ok ? "success" : "error")">@_message</p>
+    }
+    <button class="btn btn-danger-ghost block" @onclick="AskClear"><Icon Name="trash" Size="18" /> Erase all data</button>
+</section>
+
+<h2 class="section-title">Install on your phone</h2>
+<section class="card settings">
+    <div class="install">
+        <span class="avatar"><Icon Name="phone" Size="18" /></span>
+        <ol>
+            <li>Open this page in <strong>Chrome</strong> on Android.</li>
+            <li>Tap <strong>⋮</strong> → <strong>Add to Home screen</strong> (or <strong>Install app</strong>).</li>
+            <li>Launch RepLog from your home screen. It runs full-screen and works offline.</li>
+        </ol>
+    </div>
+</section>
+
+<p class="muted small center version">RepLog v1.0 · Built with Blazor WebAssembly</p>
+
+<ConfirmDialog Request="_confirm" OnDismiss="() => _confirm = null" />
+
+@code {
+    private static readonly int[] RestOptions = [0, 60, 90, 120, 180];
+    private string? _message;
+    private bool _ok;
+    private ConfirmRequest? _confirm;
+
+    private Task Update(Action<UserSettings> change) => Data.UpdateSettingsAsync(change);
+
+    private async Task SetTheme(ThemePreference t)
+    {
+        await Update(s => s.Theme = t);
+        try { await Device.ApplyTheme(t); } catch (JSException) { }
+    }
+
+    private async Task Export()
+    {
+        await Device.DownloadText($"replog-backup-{Data.Now:yyyy-MM-dd}.json", Data.ExportJson());
+        (_ok, _message) = (true, "Backup downloaded.");
+    }
+
+    private async Task Import(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024));
+            var result = await Data.ImportJsonAsync(await reader.ReadToEndAsync());
+            (_ok, _message) = (result.Ok, result.Message);
+            if (result.Ok) await Device.ApplyTheme(Data.Settings.Theme);
+        }
+        catch (IOException)
+        {
+            (_ok, _message) = (false, "Couldn't read that file (max 20 MB).");
+        }
+    }
+
+    private void AskClear() => _confirm = new("Erase all data?",
+        "Every workout, custom exercise and setting on this device will be permanently deleted. Export a backup first if you might want it.",
+        "Erase everything",
+        async () => { await Data.ClearAllAsync(); (_ok, _message) = (true, "All data erased."); });
+}

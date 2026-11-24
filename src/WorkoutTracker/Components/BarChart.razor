@@ -1,0 +1,26 @@
+@* Responsive CSS bar chart; the last bar is highlighted as "current". *@
+<div class="bar-chart" style="--chart-h:@(Height)px" role="img" aria-label="@AriaLabel">
+    @{ var max = Math.Max(Points.Count == 0 ? 0 : Points.Max(p => p.Value), 0.0001); }
+    @for (var i = 0; i < Points.Count; i++)
+    {
+        var p = Points[i];
+        var pct = p.Value <= 0 ? 0 : Math.Max(4, p.Value / max * 100);
+        <div class="bar-col @(i == Points.Count - 1 ? "current" : "")" title="@p.Label: @p.Display">
+            <div class="bar-track">
+                @if (ShowValues && p.Value > 0)
+                {
+                    <span class="bar-value">@p.Display</span>
+                }
+                <div class="bar" style="height:@(pct.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+            </div>
+            <div class="bar-label">@p.Label</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<ChartPoint> Points { get; set; } = [];
+    [Parameter] public int Height { get; set; } = 120;
+    [Parameter] public bool ShowValues { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Bar chart";
+}
